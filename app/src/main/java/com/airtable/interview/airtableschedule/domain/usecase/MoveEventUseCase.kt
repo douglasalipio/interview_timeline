@@ -59,6 +59,12 @@ class MoveEventUseCase(
                 return Result.failure(IllegalArgumentException("Cannot move event beyond reasonable date range"))
             }
             
+            // Check for collision with other events
+            val collisionResult = validateCollision(updatedEvent)
+            if (collisionResult.isFailure) {
+                return collisionResult
+            }
+            
             // Update the event in repository
             eventRepository.updateEvent(updatedEvent)
         } catch (e: Exception) {
@@ -83,5 +89,42 @@ class MoveEventUseCase(
         calendar.time = date
         calendar.add(Calendar.DAY_OF_MONTH, days)
         return calendar.time
+    }
+    
+    private suspend fun validateCollision(eventToMove: Event): Result<Event> {
+        return try {
+            // Get all events except the one being moved
+            val allEvents = eventRepository.getEvents()
+            val otherEvents = allEvents.filter { it.id != eventToMove.id }
+            
+            // Check for overlaps with other events
+            val conflictingEvents = otherEvents.filter { otherEvent ->
+                eventsOverlap(eventToMove, otherEvent)
+            }
+            
+            if (conflictingEvents.isNotEmpty()) {
+                val conflictNames = conflictingEvents.joinToString(", ") { it.name }
+                println("MoveEventUseCase: Collision detected with: $conflictNames")
+                return Result.failure(
+                    IllegalArgumentException("Event conflicts with: $conflictNames")
+                )
+            }
+            
+            Result.success(eventToMove)
+        } catch (e: Exception) {
+            println("MoveEventUseCase: Error validating collision: ${e.message}")
+            Result.failure(e)
+        }
+    }
+    
+    private fun eventsOverlap(event1: Event, event2: Event): Boolean {
+        // Two events overlap if:
+        // event1.start < event2.end AND event2.start < event1.end
+        val event1Start = event1.startDate.time
+        val event1End = event1.endDate.time
+        val event2Start = event2.startDate.time  
+        val event2End = event2.endDate.time
+        
+        return event1Start < event2End && event2Start < event1End
     }
 }

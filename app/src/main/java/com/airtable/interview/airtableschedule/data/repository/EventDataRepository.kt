@@ -18,6 +18,10 @@ class EventRepositoryImpl : EventRepository {
         return _events.asStateFlow()
     }
     
+    override suspend fun getEvents(): List<Event> {
+        return _events.value
+    }
+    
     override suspend fun updateEvent(event: Event): Result<Event> {
         return try {
             val currentEvents = _events.value.toMutableList()
